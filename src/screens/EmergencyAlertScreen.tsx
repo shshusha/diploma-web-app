@@ -210,7 +210,7 @@ export const EmergencyAlertScreen: React.FC<EmergencyAlertScreenProps> = ({
       setIsSubmitting(false);
       Alert.alert(
         'Emergency Alert Sent',
-        'Your emergency alert has been sent to all your contacts and emergency services. Help is on the way.',
+        'Your emergency alert has been sent. Your contacts and local authorities have been notified.',
         [
           {
             text: 'OK',
@@ -277,10 +277,6 @@ export const EmergencyAlertScreen: React.FC<EmergencyAlertScreenProps> = ({
           setLocation(locationText);
           setCoordinates({ latitude, longitude });
           setIsGettingLocation(false);
-          Alert.alert(
-            'Location Retrieved',
-            `Your current location has been set: ${locationText}`,
-          );
         },
         _error => {
           setIsGettingLocation(false);
@@ -367,18 +363,6 @@ export const EmergencyAlertScreen: React.FC<EmergencyAlertScreenProps> = ({
       </Appbar.Header>
 
       <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-        <Card style={styles.card}>
-          <Card.Content>
-            <Text variant="titleLarge" style={styles.title}>
-              Send Emergency Alert
-            </Text>
-            <Text variant="bodyMedium" style={styles.subtitle}>
-              Select the type of emergency and provide details to send an alert
-              to your contacts and emergency services.
-            </Text>
-          </Card.Content>
-        </Card>
-
         {/* Emergency Type Selection */}
         <Card style={styles.card}>
           <Card.Content>

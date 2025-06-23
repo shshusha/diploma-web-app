@@ -16,6 +16,10 @@ import {
   IconButton,
   useTheme,
   Avatar,
+  Button,
+  TextInput,
+  Modal,
+  Portal,
 } from 'react-native-paper';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { trpc } from '../lib/trpc';
@@ -30,8 +34,16 @@ interface Contact {
   id: string;
   name: string;
   phone: string;
-  relationship?: string;
-  isActive?: boolean;
+  email: string | null;
+  relation: string | null;
+  userId: string;
+}
+
+interface ContactFormData {
+  name: string;
+  phone: string;
+  email: string;
+  relation: string;
 }
 
 export const EmergencyContactsScreen: React.FC<
@@ -39,6 +51,14 @@ export const EmergencyContactsScreen: React.FC<
 > = ({ selectedAccountId, onBack }) => {
   const theme = useTheme();
   const [refreshing, setRefreshing] = useState(false);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [editingContact, setEditingContact] = useState<Contact | null>(null);
+  const [formData, setFormData] = useState<ContactFormData>({
+    name: '',
+    phone: '',
+    email: '',
+    relation: '',
+  });
 
   // Set the current account in simulation service when component mounts
   React.useEffect(() => {
@@ -59,6 +79,39 @@ export const EmergencyContactsScreen: React.FC<
   const { data: selectedAccount } = trpc.users.getById.useQuery({
     id: selectedAccountId,
   });
+
+  // tRPC mutations
+  const createContactMutation = trpc.emergencyContacts.create.useMutation({
+    onSuccess: () => {
+      refetchContacts();
+      resetForm();
+      setModalVisible(false);
+    },
+  });
+
+  const updateContactMutation = trpc.emergencyContacts.update.useMutation({
+    onSuccess: () => {
+      refetchContacts();
+      resetForm();
+      setModalVisible(false);
+      setEditingContact(null);
+    },
+  });
+
+  const deleteContactMutation = trpc.emergencyContacts.delete.useMutation({
+    onSuccess: () => {
+      refetchContacts();
+    },
+  });
+
+  const resetForm = () => {
+    setFormData({
+      name: '',
+      phone: '',
+      email: '',
+      relation: '',
+    });
+  };
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -84,11 +137,72 @@ export const EmergencyContactsScreen: React.FC<
   };
 
   const handleAddContact = () => {
+    console.log('Opening add contact modal');
+    resetForm();
+    setEditingContact(null);
+    setModalVisible(true);
+  };
+
+  const handleEditContact = (contact: Contact) => {
+    console.log('Opening edit contact modal for:', contact.name);
+    setFormData({
+      name: contact.name,
+      phone: contact.phone,
+      email: contact.email || '',
+      relation: contact.relation || '',
+    });
+    setEditingContact(contact);
+    setModalVisible(true);
+  };
+
+  const handleDeleteContact = (contact: Contact) => {
     Alert.alert(
-      'Add Emergency Contact',
-      'This feature will allow you to add new emergency contacts.',
-      [{ text: 'OK' }],
+      'Delete Contact',
+      `Are you sure you want to delete ${contact.name}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            deleteContactMutation.mutate({ id: contact.id });
+          },
+        },
+      ],
     );
+  };
+
+  const handleSaveContact = () => {
+    if (!formData.name.trim() || !formData.phone.trim()) {
+      Alert.alert('Error', 'Name and phone number are required.');
+      return;
+    }
+
+    if (editingContact) {
+      // Update existing contact
+      updateContactMutation.mutate({
+        id: editingContact.id,
+        name: formData.name.trim(),
+        phone: formData.phone.trim(),
+        email: formData.email.trim() || undefined,
+        relation: formData.relation.trim() || undefined,
+      });
+    } else {
+      // Create new contact
+      createContactMutation.mutate({
+        userId: selectedAccountId,
+        name: formData.name.trim(),
+        phone: formData.phone.trim(),
+        email: formData.email.trim() || undefined,
+        relation: formData.relation.trim() || undefined,
+      });
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setModalVisible(false);
+    setEditingContact(null);
+    resetForm();
   };
 
   return (
@@ -152,22 +266,44 @@ export const EmergencyContactsScreen: React.FC<
                             {contact.phone || 'No phone number'}
                           </Text>
                           <Text style={styles.contactRelationship}>
-                            {contact.relationship || 'Emergency Contact'}
+                            {contact.relation || 'Emergency Contact'}
                           </Text>
                         </View>
                       </View>
-                      <IconButton
-                        icon="phone"
-                        mode="contained"
-                        onPress={() =>
-                          handleCallContact(contact.phone, contact.name)
-                        }
-                        style={[
-                          styles.callButton,
-                          { backgroundColor: '#4CAF50' },
-                        ]}
-                        iconColor="white"
-                      />
+                      <View style={styles.contactActions}>
+                        <IconButton
+                          icon="phone"
+                          mode="contained"
+                          onPress={() =>
+                            handleCallContact(contact.phone, contact.name)
+                          }
+                          style={[
+                            styles.actionButton,
+                            { backgroundColor: '#4CAF50' },
+                          ]}
+                          iconColor="white"
+                        />
+                        <IconButton
+                          icon="edit"
+                          mode="contained"
+                          onPress={() => handleEditContact(contact)}
+                          style={[
+                            styles.actionButton,
+                            { backgroundColor: '#2196F3' },
+                          ]}
+                          iconColor="white"
+                        />
+                        <IconButton
+                          icon="delete"
+                          mode="contained"
+                          onPress={() => handleDeleteContact(contact)}
+                          style={[
+                            styles.actionButton,
+                            { backgroundColor: '#F44336' },
+                          ]}
+                          iconColor="white"
+                        />
+                      </View>
                     </View>
                   </Card.Content>
                 </Card>
@@ -182,7 +318,7 @@ export const EmergencyContactsScreen: React.FC<
                   Add emergency contacts to ensure help is available when needed
                 </Text>
                 <IconButton
-                  icon="add"
+                  icon="plus"
                   mode="contained"
                   onPress={handleAddContact}
                   style={styles.addButton}
@@ -201,11 +337,86 @@ export const EmergencyContactsScreen: React.FC<
       {emergencyContacts && emergencyContacts.length > 0 && (
         <FAB
           style={[styles.fab, { backgroundColor: theme.colors.primary }]}
-          icon="add"
+          icon="plus"
           onPress={handleAddContact}
           label="Add Contact"
         />
       )}
+
+      {/* Contact Form Modal */}
+      <Portal>
+        <Modal
+          visible={modalVisible}
+          onDismiss={handleCancelEdit}
+          contentContainerStyle={styles.modalContainer}
+        >
+          <Card style={styles.modalCard}>
+            <Card.Content>
+              <Text variant="titleLarge" style={styles.modalTitle}>
+                {editingContact ? 'Edit Contact' : 'Add Emergency Contact'}
+              </Text>
+
+              <TextInput
+                mode="outlined"
+                label="Name *"
+                value={formData.name}
+                onChangeText={text => setFormData({ ...formData, name: text })}
+                style={styles.input}
+              />
+
+              <TextInput
+                mode="outlined"
+                label="Phone Number *"
+                value={formData.phone}
+                onChangeText={text => setFormData({ ...formData, phone: text })}
+                style={styles.input}
+                keyboardType="phone-pad"
+              />
+
+              <TextInput
+                mode="outlined"
+                label="Email (Optional)"
+                value={formData.email}
+                onChangeText={text => setFormData({ ...formData, email: text })}
+                style={styles.input}
+                keyboardType="email-address"
+              />
+
+              <TextInput
+                mode="outlined"
+                label="Relationship (Optional)"
+                value={formData.relation}
+                onChangeText={text =>
+                  setFormData({ ...formData, relation: text })
+                }
+                style={styles.input}
+                placeholder="e.g., Spouse, Parent, Friend"
+              />
+
+              <View style={styles.modalButtons}>
+                <Button
+                  mode="outlined"
+                  onPress={handleCancelEdit}
+                  style={styles.modalButton}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  mode="contained"
+                  onPress={handleSaveContact}
+                  style={styles.modalButton}
+                  loading={
+                    createContactMutation.isPending ||
+                    updateContactMutation.isPending
+                  }
+                >
+                  {editingContact ? 'Update' : 'Add Contact'}
+                </Button>
+              </View>
+            </Card.Content>
+          </Card>
+        </Modal>
+      </Portal>
     </View>
   );
 };
@@ -283,7 +494,11 @@ const styles = StyleSheet.create({
     color: '#999',
     fontSize: 12,
   },
-  callButton: {
+  contactActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  actionButton: {
     margin: 4,
   },
   emptyCard: {
@@ -317,5 +532,52 @@ const styles = StyleSheet.create({
     margin: 16,
     right: 0,
     bottom: 0,
+  },
+  modalContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 400,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 20,
+  },
+  input: {
+    marginBottom: 16,
+  },
+  relationshipButton: {
+    marginBottom: 16,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  modalButton: {
+    flex: 1,
+    margin: 4,
+  },
+  selectorModalContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  selectorCard: {
+    width: '80%',
+    padding: 20,
+  },
+  selectorTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 20,
+  },
+  cancelButton: {
+    marginTop: 16,
   },
 });

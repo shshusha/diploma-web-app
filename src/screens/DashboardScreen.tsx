@@ -64,6 +64,13 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
     userId: selectedAccountId, // Filter by current user
   });
 
+  // Get total alert count for history section
+  const { data: allAlerts, isLoading: allAlertsLoading } =
+    trpc.alerts.getAll.useQuery({
+      limit: 100, // Get more alerts for total count
+      userId: selectedAccountId, // Filter by current user
+    });
+
   // Get selected account details
   const { data: selectedAccount } = trpc.users.getById.useQuery({
     id: selectedAccountId,
@@ -316,7 +323,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
           </Text>
           <View style={styles.quickActionsContainer}>
             <QuickActionButton
-              title="Call Contacts"
+              title="Contacts"
               icon="phone"
               onPress={handleCallContacts}
               color="#4CAF50"
@@ -341,9 +348,9 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
             <Card style={styles.alertsCard}>
               <Card.Content style={styles.alertsContent}>
                 <Text style={styles.alertsTitle}>
-                  {alertsLoading
+                  {allAlertsLoading
                     ? 'Loading...'
-                    : `${alerts?.length || 0} active alerts`}
+                    : `${allAlerts?.length || 0} total alerts`}
                 </Text>
                 <Text style={styles.alertsSubtitle}>
                   View your complete alert history and manage all alerts
